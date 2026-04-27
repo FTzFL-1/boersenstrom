@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Börsenstrom</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;600;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Titan palette */
+      --bg:          #8C9098;   /* mittleres Titangrau */
+      --bg2:         #9EA3A9;   /* etwas heller */
+      --panel:       #B8BCC2;   /* helles Titan, Kartenoberfläche */
+      --panel-deep:  #A4A8AE;   /* etwas tiefer für Sektionen */
+      --header:      #2E3035;   /* dunkles Titan / Graphit */
+      --border:      #8A8E94;
+      --border2:     #A0A4AA;
+
+      /* Komplementär: warmes Bernstein-Gold */
+      --gold:        #C8820A;   /* Hauptakzent */
+      --gold-bright: #E0980C;   /* hover / aktiv */
+      --gold-dim:    #A06808;   /* gedämpft */
+      --gold-text:   #7A4E04;   /* dunkles Gold für Text auf hellem Panel */
+
+      /* Alarm / Positiv */
+      --red:         #8B1A00;
+      --green:       #1A5C30;
+
+      /* Text */
+      --text:        #1C1E22;   /* fast schwarz mit kühlem Unterton */
+      --label:       #2E3238;
+      --sub:         #5A5E64;
+      --sub2:        #787C82;
+
+      --mono:    'Share Tech Mono', monospace;
+      --display: 'Barlow Condensed', sans-serif;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      /* subtile Titan-Textur: diagonale Linien */
+      background-image: repeating-linear-gradient(
+        135deg,
+        rgba(255,255,255,0.03) 0px,
+        rgba(255,255,255,0.03) 1px,
+        transparent 1px,
+        transparent 6px
+      );
+      color: var(--text);
+      font-family: var(--display);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px 48px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      width: 100%;
+      max-width: 460px;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.25) inset,
+        0 4px 20px rgba(0,0,0,0.25),
+        0 1px 3px rgba(0,0,0,0.15);
+    }
+
+    /* Header */
+    .header {
+      background: var(--header);
+      padding: 16px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 2px solid var(--gold-dim);
+    }
+    .app-name {
+      font-weight: 900; font-size: 21px;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--gold-bright);
+    }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .timestamp { font-family: var(--mono); font-size: 11px; color: #888; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #44cc66; flex-shrink: 0;
+      animation: blink 2s ease-in-out infinite;
+    }
+    .status-dot.loading { background: var(--gold-bright); animation: none; }
+    .status-dot.error   { background: #dd4422; animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .refresh-btn {
+      background: none; border: none; color: #777;
+      font-size: 15px; cursor: pointer;
+      font-family: var(--mono); transition: color 0.2s;
+    }
+    .refresh-btn:hover { color: var(--gold-bright); }
+
+    /* Section label */
+    .section-label {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--sub2);
+      padding: 10px 20px 6px;
+      background: var(--panel-deep);
+      border-bottom: 1px solid var(--border2);
+    }
+
+    /* Börsenpreis */
+    .price-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 20px;
+      border-bottom: 2px solid var(--border);
+    }
+    .price-label { font-weight: 600; font-size: 18px; color: var(--label); }
+    .price-sub   { font-size: 11px; color: var(--sub); margin-top: 3px; font-weight: 300; }
+    .price-value {
+      font-family: var(--mono); font-size: 32px;
+      color: var(--gold); text-align: right;
+      letter-spacing: -0.02em;
+    }
+    .price-value.negative { color: var(--green); }
+    .price-value.loading  { color: var(--border); font-size: 20px; }
+    .price-value sup { font-size: 12px; opacity: 0.55; margin-left: 2px; }
+
+    /* Toggle rows */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border2);
+    }
+    .toggle-left { flex: 1; }
+    .toggle-label { font-size: 16px; font-weight: 600; color: var(--label); }
+    .toggle-sub   { font-size: 11px; color: var(--sub); margin-top: 2px; }
+    .toggle-right { display: flex; align-items: center; gap: 12px; }
+    .toggle-value {
+      font-family: var(--mono); font-size: 17px;
+      color: var(--sub2); min-width: 90px; text-align: right;
+      transition: color 0.2s;
+    }
+    .toggle-value.active { color: var(--gold); }
+
+    /* Switch */
+    .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity:0; width:0; height:0; }
+    .track {
+      position: absolute; inset: 0;
+      background: var(--bg); border-radius: 12px;
+      cursor: pointer; transition: background 0.2s;
+      border: 1px solid var(--border);
+    }
+    .track::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px; left: 2px; top: 2px;
+      background: var(--panel); border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+    .switch input:checked + .track { background: var(--gold-dim); border-color: var(--gold); }
+    .switch input:checked + .track::before { transform: translateX(20px); background: var(--gold-bright); }
+
+    /* Netzentgelt input */
+    .netz-input-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 20px 14px;
+      border-bottom: 2px solid var(--border);
+      background: var(--panel-deep);
+    }
+    .netz-input-label { font-size: 12px; color: var(--sub); flex: 1; }
+    .netz-input {
+      background: var(--panel); border: 1px solid var(--border);
+      color: var(--label); font-family: var(--mono);
+      font-size: 16px; width: 72px; text-align: right;
+      outline: none; padding: 5px 6px; border-radius: 3px;
+      transition: border-color 0.2s;
+    }
+    .netz-input:focus { border-color: var(--gold); }
+    .netz-input.active { border-color: var(--gold-dim); color: var(--gold); }
+    .netz-unit { font-size: 12px; color: var(--sub); }
+
+    /* Total */
+    .total-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 20px 18px;
+      background: var(--panel-deep);
+      border-bottom: 2px solid var(--border);
+    }
+    .total-label {
+      font-weight: 900; font-size: 20px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--label);
+    }
+    .total-value {
+      font-family: var(--mono); font-size: 36px;
+      color: var(--text); letter-spacing: -0.02em;
+    }
+    .total-value sup { font-size: 13px; opacity: 0.4; }
+
+    /* Margin box */
+    .margin-box { padding: 14px 20px 16px; border-bottom: 1px solid var(--border2); }
+    .margin-hint { font-family: var(--mono); font-size: 12px; color: var(--sub2); line-height: 1.6; }
+    .margin-result { font-family: var(--mono); font-size: 13px; line-height: 1.8; }
+    .margin-result .bad  { color: var(--red); font-weight: bold; }
+    .margin-result .good { color: var(--green); font-weight: bold; }
+
+    .provider-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .provider-label { font-size: 12px; color: var(--sub); flex: 1; }
+    .provider-input {
+      background: var(--panel); border: 1px solid #C09080;
+      color: var(--red); font-family: var(--mono);
+      font-size: 16px; width: 72px; text-align: right;
+      outline: none; padding: 5px 6px; border-radius: 3px;
+    }
+    .provider-input:focus { border-color: var(--red); }
+    .provider-unit { font-size: 12px; color: var(--sub); }
+
+    .error-msg {
+      font-family: var(--mono); font-size: 11px; color: var(--red);
+      padding: 4px 20px; min-height: 18px; text-align: center;
+    }
+
+    .btn-end {
+      display: block; width: calc(100% - 40px);
+      margin: 14px 20px 20px; padding: 13px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--sub2);
+      font-family: var(--display); font-weight: 600; font-size: 13px;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      cursor: pointer; border-radius: 3px;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .btn-end:hover { border-color: var(--red); color: var(--red); background: rgba(139,26,0,0.05); }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <div class="header">
+      <div class="app-name">Börsenstrom</div>
+      <div class="header-right">
+        <div class="status-dot loading" id="dot"></div>
+        <span class="timestamp" id="ts">Lade...</span>
+        <button class="refresh-btn" onclick="fetchPrice()">↺</button>
+      </div>
+    </div>
+
+    <div class="section-label">Rohdaten · DE/LU Day-Ahead · SMARD / BNetzA</div>
+    <div class="price-row">
+      <div>
+        <div class="price-label">Börsenpreis</div>
+        <div class="price-sub">Großhandel · netto · ohne Abgaben</div>
+      </div>
+      <div class="price-value loading" id="val-boerse">—</div>
+    </div>
+
+    <div class="section-label">Optionale Abgaben</div>
+
+    <div class="toggle-row">
+      <div class="toggle-left">
+        <div class="toggle-label">Mehrwertsteuer</div>
+        <div class="toggle-sub">19 % auf Börsenpreis</div>
+      </div>
+      <div class="toggle-right">
+        <div class="toggle-value" id="val-mwst">—</div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-mwst" onchange="recalc()" />
+          <span class="track"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-left">
+        <div class="toggle-label">Stromsteuer</div>
+        <div class="toggle-sub">Fix 2,05 ct/kWh · § 3 StromStG</div>
+      </div>
+      <div class="toggle-right">
+        <div class="toggle-value" id="val-stromst">+2,05 ct</div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-stromst" onchange="recalc()" />
+          <span class="track"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="toggle-row" style="border-bottom:none; padding-bottom:4px;">
+      <div class="toggle-left">
+        <div class="toggle-label">Netzentgelt</div>
+        <div class="toggle-sub">Regionaler Wert (editierbar)</div>
+      </div>
+      <div class="toggle-right">
+        <div class="toggle-value" id="val-netz">—</div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-netz" onchange="recalc()" />
+          <span class="track"></span>
+        </label>
+      </div>
+    </div>
+    <div class="netz-input-row">
+      <span class="netz-input-label">Dein Netzentgelt:</span>
+      <input type="number" class="netz-input" id="input-netz"
+        value="8.5" min="0" max="30" step="0.1"
+        onchange="recalc()" oninput="recalc()" />
+      <span class="netz-unit">ct/kWh</span>
+    </div>
+
+    <div class="total-row">
+      <div class="total-label">Gesamtpreis</div>
+      <div class="total-value" id="val-total">— <sup>ct/kWh</sup></div>
+    </div>
+
+    <div class="margin-box">
+      <div id="margin-hint" class="margin-hint">Alle Abgaben aktivieren → Anbietermarge berechnen</div>
+      <div id="margin-result" class="margin-result" style="display:none"></div>
+      <div class="provider-row" id="provider-row" style="display:none">
+        <span class="provider-label">Dein Anbietertarif:</span>
+        <input type="number" class="provider-input" id="input-anbieter"
+          value="30" min="0" max="100" step="0.5"
+          onchange="recalc()" oninput="recalc()" />
+        <span class="provider-unit">ct/kWh</span>
+      </div>
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+    <button class="btn-end" onclick="handleBeenden()">— Beenden —</button>
+
+  </div>
+
+  <script>
+    const STROMSTEUER = 2.05;
+    let boersePreis = null;
+
+    async function fetchPrice() {
+      const dot = document.getElementById('dot');
+      const ts  = document.getElementById('ts');
+      const err = document.getElementById('error-msg');
+      const bEl = document.getElementById('val-boerse');
+
+      dot.className = 'status-dot loading';
+      ts.textContent = 'Lade...';
+      err.textContent = '';
+      bEl.textContent = '—';
+      bEl.className = 'price-value loading';
+
+      try {
+        const indexRes = await fetch('https://www.smard.de/app/chart_data/4169/DE-LU/hour/index_4169_DE-LU_hour.json');
+        if (!indexRes.ok) throw new Error(`SMARD Index HTTP ${indexRes.status}`);
+        const { timestamps } = await indexRes.json();
+        if (!timestamps?.length) throw new Error('Keine Timestamps');
+
+        const latest  = timestamps[timestamps.length - 1];
+        const dataRes = await fetch(`https://www.smard.de/app/chart_data/4169/DE-LU/hour/4169_DE-LU_hour_${latest}.json`);
+        if (!dataRes.ok) throw new Error(`SMARD Daten HTTP ${dataRes.status}`);
+        const { series } = await dataRes.json();
+        if (!series?.length) throw new Error('Keine Preisdaten');
+
+        const now = Date.now();
+        let current = null, currentTs = null;
+        for (let i = series.length - 1; i >= 0; i--) {
+          if (series[i][0] <= now && series[i][1] !== null) {
+            current = series[i][1]; currentTs = series[i][0]; break;
+          }
+        }
+        if (current === null) {
+          for (let i = series.length - 1; i >= 0; i--) {
+            if (series[i][1] !== null) { current = series[i][1]; currentTs = series[i][0]; break; }
+          }
+        }
+        if (current === null) throw new Error('Kein Preis verfügbar');
+
+        boersePreis = current / 10;
+        const d = new Date(currentTs);
+        const p = n => n.toString().padStart(2,'0');
+        ts.textContent = `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())} Uhr`;
+        dot.className = 'status-dot';
+        bEl.className = 'price-value' + (boersePreis < 0 ? ' negative' : '');
+        bEl.textContent = fCt(boersePreis);
+        recalc();
+      } catch(e) {
+        dot.className = 'status-dot error';
+        ts.textContent = 'Fehler';
+        err.textContent = `⚠ ${e.message}`;
+        boersePreis = null;
+        recalc();
+      }
+    }
+
+    function fCt(v) {
+      if (v === null || isNaN(v)) return '—';
+      return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' ct';
+    }
+
+    function recalc() {
+      const mwstOn  = document.getElementById('toggle-mwst').checked;
+      const stromOn = document.getElementById('toggle-stromst').checked;
+      const netzOn  = document.getElementById('toggle-netz').checked;
+      const netzVal = parseFloat(document.getElementById('input-netz').value) || 0;
+      const mwstBetrag = boersePreis !== null ? boersePreis * 0.19 : 0;
+
+      ['mwst','stromst','netz'].forEach(id => {
+        document.getElementById(`val-${id}`).className =
+          'toggle-value' + (document.getElementById(`toggle-${id === 'stromst' ? 'stromst' : id}`).checked ? ' active' : '');
+      });
+      document.getElementById('input-netz').className = 'netz-input' + (netzOn ? ' active' : '');
+
+      document.getElementById('val-mwst').textContent   = boersePreis !== null ? fCt(mwstBetrag) : '—';
+      document.getElementById('val-stromst').textContent = fCt(STROMSTEUER);
+      document.getElementById('val-netz').textContent   = fCt(netzVal);
+
+      const totalEl = document.getElementById('val-total');
+      if (boersePreis === null) {
+        totalEl.innerHTML = '— <sup>ct/kWh</sup>';
+      } else {
+        const total = boersePreis
+          + (mwstOn  ? mwstBetrag  : 0)
+          + (stromOn ? STROMSTEUER : 0)
+          + (netzOn  ? netzVal     : 0);
+        totalEl.innerHTML = fCt(total) + ' <sup>ct/kWh</sup>';
+      }
+
+      const allOn   = mwstOn && stromOn && netzOn && boersePreis !== null;
+      const hint    = document.getElementById('margin-hint');
+      const result  = document.getElementById('margin-result');
+      const provRow = document.getElementById('provider-row');
+
+      if (allOn) {
+        hint.style.display = 'none';
+        result.style.display = 'block';
+        provRow.style.display = 'flex';
+        const anbieter = parseFloat(document.getElementById('input-anbieter').value);
+        if (!isNaN(anbieter)) {
+          const total = boersePreis + mwstBetrag + STROMSTEUER + netzVal;
+          const marge = anbieter - total;
+          const pct = total > 0 ? ((marge / total) * 100).toFixed(0) : '?';
+          result.innerHTML = marge >= 0
+            ? `Anbietermarge: <span class="bad">+${marge.toFixed(2)} ct/kWh (+${pct}%)</span><br>Du zahlst ${marge.toFixed(2)} ct mehr als nötig.`
+            : `Dein Tarif liegt <span class="good">${Math.abs(marge).toFixed(2)} ct unter</span> dem berechneten Preis.`;
+        }
+      } else {
+        hint.style.display = 'block';
+        hint.textContent = 'Alle Abgaben aktivieren → Anbietermarge berechnen';
+        result.style.display = 'none';
+        provRow.style.display = 'none';
+      }
+    }
+
+    function handleBeenden() { window.close(); }
+    fetchPrice();
+  </script>
+</body>
+</html>
